@@ -1,0 +1,53 @@
+### ТОП-10 УЯЗВИМОСТЕЙ ДЛЯ ПОИСКА
+
+
+# Java:
+
+SQL Injection (StringBuilder + SQL)
+Command Injection (Runtime.exec)
+XXE (DocumentBuilderFactory)
+Path Traversal (File с user input)
+Hardcoded credentials
+
+
+# Python:
+
+SQL Injection (f-string в execute)
+eval()/exec()
+os.system()/subprocess(shell=True)
+pickle.loads()
+yaml.load() без SafeLoader
+
+
+🔴 OWASP TOP 10 (2021) - ЧТО ГРЕПАТЬ
+
+A01 Broken Access Control → grep -rn "admin\|role\|@PreAuthorize" .
+A02 Crypto Failures → grep -rn "MD5\|SHA1\|DES\|password.*=" .
+A03 Injection → grep -rn "exec(\|eval(\|StringBuilder.*SELECT\|cursor.execute.*f\"" .
+A04 Insecure Design → grep -rn "max_attempts\|rate_limit\|while.*login" .
+A05 Misconfiguration → grep -rn "DEBUG.*True\|CrossOrigin.*\*\|admin/admin" .
+A06 Vuln Components → trivy fs . / dependency-check.sh
+A07 Auth Failures → grep -rn "@login_required\|jwt.decode.*False\|session\[" .
+A08 Integrity → grep -rn "pickle.loads\|yaml.load\|ObjectInputStream" .
+A09 Logging → grep -rn "print.*password\|log.*secret\|traceback" .
+A10 SSRF → grep -rn "requests.get\|urllib\|URL.openConnection" .
+
+🔴 CWE TOP 25 - ПАТТЕРНЫ ДЛЯ ПОИСКА
+
+CWE-89 SQLi → StringBuilder + SQL / f-string в execute
+CWE-78 OS Cmd → Runtime.exec / os.system / subprocess shell=True
+CWE-79 XSS → response.getWriter / render_template_string / без escape()
+CWE-22 Path Traversal → new File(user) / open(user_path) / ../
+CWE-502 Deserialization → pickle.loads / ObjectInputStream / yaml.load
+CWE-611 XXE → DocumentBuilderFactory без setFeature
+CWE-522 Credentials → password= в коде / логируют пароли / http://
+CWE-20 Input Validation → нет проверок длины/типа / доверие к клиенту
+CWE-352 CSRF → нет токенов / GET меняет состояние / @csrf_exempt
+
+🔴 TOP CVE - ПРОВЕРКА ВЕРСИЙ
+
+Log4Shell (CVE-2021-44228) → grep -rn "log4j.*2\.[0-9]\|2\.1[0-6]" pom.xml build.gradle
+Spring4Shell (CVE-2022-22965) → grep -rn "spring.*5\.[0-2]\|boot.*2\.[0-5]" .
+Requests (CVE-2018-18074) → grep -rn "requests.*2\.[0-1]" requirements.txt
+PyYAML (CVE-2020-14343) → grep -rn "PyYAML.*[0-4]\|5\.[0-3]" requirements.txt
+Django (<3.2) / Flask (<2.0) → pip list | grep -E "django|flask"

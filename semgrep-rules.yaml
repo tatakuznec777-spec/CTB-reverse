@@ -1,0 +1,112 @@
+rules:
+  # ===== JAVA =====
+  
+  - id: java-sql-injection-string-concat
+    patterns:
+      - pattern: |
+          String $SQL = ... + ...;
+          ...
+          $CONN.prepareStatement($SQL);
+    message: "SQL Injection via String concatenation"
+    severity: ERROR
+    languages: [java]
+    
+  - id: java-sql-injection-stringbuilder
+    patterns:
+      - pattern: |
+          StringBuilder $SB = new StringBuilder(...);
+          ...
+          $CONN.prepareStatement($SB.toString());
+    message: "SQL Injection via StringBuilder"
+    severity: ERROR
+    languages: [java]
+    
+  - id: java-command-injection
+    patterns:
+      - pattern: |
+          Runtime.getRuntime().exec($USER_INPUT);
+    message: "Command Injection"
+    severity: ERROR
+    languages: [java]
+    
+  - id: java-path-traversal
+    patterns:
+      - pattern: |
+          new File($USER_INPUT);
+    message: "Path Traversal"
+    severity: WARNING
+    languages: [java]
+    
+  - id: java-xxe
+    patterns:
+      - pattern: |
+          DocumentBuilderFactory $DBF = DocumentBuilderFactory.newInstance();
+    message: "XXE Vulnerability"
+    severity: ERROR
+    languages: [java]
+    
+  - id: java-hardcoded-password
+    patterns:
+      - pattern: |
+          String $PASS = "...";
+    message: "Hardcoded password"
+    severity: WARNING
+    languages: [java]
+
+  # ===== PYTHON =====
+  
+  - id: python-sql-injection-format
+    patterns:
+      - pattern: |
+          cursor.execute("SELECT ... %s" % $VAR)
+    message: "SQL Injection via string formatting"
+    severity: ERROR
+    languages: [python]
+    
+  - id: python-sql-injection-fstring
+    patterns:
+      - pattern: |
+          cursor.execute(f"SELECT ... {$VAR}")
+    message: "SQL Injection via f-string"
+    severity: ERROR
+    languages: [python]
+    
+  - id: python-eval-exec
+    patterns:
+      - pattern: |
+          eval($USER_INPUT)
+    message: "Dangerous eval() usage"
+    severity: ERROR
+    languages: [python]
+    
+  - id: python-os-system
+    patterns:
+      - pattern: |
+          os.system($USER_INPUT)
+    message: "Command Injection via os.system"
+    severity: ERROR
+    languages: [python]
+    
+  - id: python-pickle
+    patterns:
+      - pattern: |
+          pickle.loads($DATA)
+    message: "Pickle deserialization"
+    severity: ERROR
+    languages: [python]
+    
+  - id: python-yaml-unsafe
+    patterns:
+      - pattern: |
+          yaml.load($DATA)
+    message: "Unsafe YAML loading"
+    severity: ERROR
+    languages: [python]
+    
+  - id: python-hardcoded-secret
+    patterns:
+      - pattern: |
+          $SECRET = "..."
+    message: "Hardcoded secret"
+    severity: WARNING
+    languages: [python]

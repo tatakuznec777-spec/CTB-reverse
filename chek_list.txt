@@ -1,0 +1,88 @@
+### JAVA EXPERT
+
+Задачи:
+
+Берет все Java задачи
+Использует: semgrep (java), trivy, ODC
+Ищет: SQLi, XXE, Command Injection, Path Traversal
+
+Чек-лист:
+
+□ Склонируй репозиторий
+□ Запусти: semgrep --config=p/java . > semgrep.txt
+или semgrep --config semgrep-rules.yaml . > semgrep.txt
+□ Запусти: trivy fs . > trivy.txt
+□ Открой ClientDaoJdbc.java (или похожие)
+□ Ищи: StringBuilder + SQL, Runtime.exec, File()
+□ Примени патч
+□ Получи флаг
+□ Сдай на ZeroTrace
+
+### PYTHON EXPERT
+
+Задачи:
+
+Берет все Python задачи
+Использует: bandit, semgrep (python), trivy
+Ищет: SQLi, eval/exec, os.system, pickle, yaml
+
+Чек-лист:
+
+□ Склонируй репозиторий
+□ Запусти: bandit -r . > bandit.txt
+□ Запусти: semgrep --config=p/python . > semgrep.txt
+или semgrep --config semgrep-rules.yaml . > semgrep.txt
+□ Ищи: eval(, exec(, os.system, cursor.execute(f"
+□ Примени патч
+□ Получи флаг
+□ Сдай на ZeroTrace
+
+### WEB SECURITY
+
+Задачи:
+
+Запускает OWASP ZAP на веб-интерфейсы
+Ищет: XSS, LFI, SQLi через формы
+Использует: ZAP, nikto, sqlmap
+
+Чек-лист:
+
+□ Открой URL из задачи
+□ Запусти ZAP: Quick Start → URL → Attack
+□ Запусти nikto: nikto -h http://target
+□ Тестируй формы на SQLi
+□ Ищи XSS в поиске/комментариях
+□ Получи флаг
+□ Сдай на ZeroTrace
+
+### COORDINATOR + DEPENDENCIES
+
+Задачи:
+
+Координирует команду
+Сканирует зависимости (ODC)
+Собирает все флаги
+Помогает с ручным анализом
+
+Чек-лист:
+
+□ Создай общий чат/документ
+□ Запиши кто какую задачу взял
+□ Запусти ODC: dependency-check.sh --scan .
+□ Импортируй отчеты в DefectDojo
+□ Собирай флаги от команды
+□ Контролируй время
+
+##№ Чек лист для каждой задачи:
+
+□ Проверил SQL Injection (StringBuilder, f-string)
+□ Проверил Command Injection (exec, system)
+□ Проверил Path Traversal (File, open)
+□ Проверил hardcoded secrets (password, secret)
+□ Проверил уязвимые зависимости (trivy/ODC)
+□ Проверил XSS (response.write, template)
+□ Проверил XXE (DocumentBuilderFactory)
+□ Проверил Deserialization (pickle, ObjectInputStream)
+□ Применил патч
+□ Получил флаг
+□ Сдал на ZeroTrace
