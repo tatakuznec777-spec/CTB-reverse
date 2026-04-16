@@ -1,60 +1,80 @@
 ### Semgrep
 
 # Базовое сканирование
+
 semgrep --config=auto .                    # Автоправила
+
 semgrep --config semgrep-rules.yaml .      # Свои правила
 
 # Конкретные языки
+
 semgrep --config=p/java .                  # Java правила
+
 semgrep --config=p/python .                # Python правила
 
 # Конкретные уязвимости
+
 semgrep --config=p/sql-injection .         # SQL Injection
+
 semgrep --config=p/command-injection .     # Command Injection
+
 semgrep --config=p/xss .                   # XSS
+
 semgrep --config=p/secrets .               # Секреты
 
 # Вывод
+
 semgrep --json -o report.json .            # JSON отчет
 
 ### Bandit(Python)
 
 bandit -r .                    # Рекурсивное сканирование
+
 bandit -r . -lll               # Только HIGH/CRITICAL
+
 bandit -r . -f json -o out.json  # JSON отчет
+
 bandit -r . -s B104,B306       # Конкретные тесты
 
 ### Trivy
 
 trivy fs .                     # Сканирование файлов
+
 trivy fs --severity CRITICAL,HIGH .  # Только критичные
+
 trivy fs -f json -o out.json . # JSON отчет
 
 ### OWASP ZAP
 
 # GUI (быстрее для CTF):
+
 1. Запустить ZAP
 2. Quick Start → URL → Attack
 3. Смотреть Alerts
 
 # CLI:
+
 zaproxy.sh -daemon
 curl "http://localhost:8080/JSON/core/action/newContext/?contextName=CTF"
 
 ### Nikto(веб-сканер)
 
 nikto -h http://target.com     # Сканирование сайта
+
 nikto -h http://target.com -o report.txt  # В файл
 
 ### SQLMap
 
 sqlmap -u "http://target.com/page.php?id=1"  # Базовое
+
 sqlmap -u "URL" --dbs          # Получить БД
+
 sqlmap -u "URL" --dump         # Выгрузить данные
 
 ### ODC (Dependency-Check)
 
 dependency-check.sh --scan . --format HTML  # HTML отчет
+
 dependency-check.sh --scan . --format JSON  # JSON отчет
 
 ### БЫСТРЫЕ КОМАНДЫ
@@ -62,33 +82,43 @@ dependency-check.sh --scan . --format JSON  # JSON отчет
 ## Для Java:
 
 cd ~/ctf_tasks
+
 git clone <URL>
+
 cd <task>
+
 semgrep --config=p/java . > semgrep.txt &
-trivy fs . > trivy.txt &
-wait
+trivy fs . > trivy.txt & wait
+
 cat semgrep.txt | grep -E "HIGH|CRITICAL"
 
 ## Для Python:
 
 cd ~/ctf_tasks
+
 git clone <URL>
+
 cd <task>
+
 bandit -r . -lll > bandit.txt &
-semgrep --config=p/python . > semgrep.txt &
-wait
+semgrep --config=p/python . > semgrep.txt & wait
+
 cat bandit.txt
 
 ## Поиск уязвимостей:
 
 # Java
 grep -rn "StringBuilder.*select\|StringBuilder.*SELECT" .
+
 grep -rn "Runtime.getRuntime().exec" .
+
 grep -rn "new File(" .
 
 # Python
 grep -rn "cursor.execute.*f\"" .
+
 grep -rn "eval(\|exec(" .
+
 grep -rn "os.system\|subprocess.*shell=True" .
 
 ## ЭКСТРЕННЫЕ КОМАНДЫ
@@ -96,14 +126,19 @@ grep -rn "os.system\|subprocess.*shell=True" .
 Если ничего не помогает:
 
 # Простой grep по коду
+
 grep -rn "password\|secret\|key" .
+
 grep -rn "admin" .
+
 grep -rn "flag\|FLAG" .
 
 # Поиск всех SQL запросов
+
 grep -rn "SELECT\|INSERT\|UPDATE\|DELETE" .
 
 # Поиск всех exec
+
 grep -rn "exec\|system\|eval" .
 
 ##  БЫСТРЫЕ КОМАНДЫ ПРОВЕРКИ
@@ -111,40 +146,57 @@ grep -rn "exec\|system\|eval" .
 # Автоматическая проверка всех версий:
 
 # Java (Maven)
+
 mvn dependency:tree | grep -E "log4j|spring|jackson|commons"
 
 # Java (Gradle)
+
 ./gradlew dependencies | grep -E "log4j|spring|jackson"
 
 # Python
+
 pip list --outdated
 pip-audit -r requirements.txt
 
 # Universal
+
 trivy fs . --severity CRITICAL,HIGH
 
 # Поиск hardcoded secrets:
 
 # Все секреты
+
 grep -rn "password.*=\|secret.*=\|api_key.*=\|token.*=" .
+
 grep -rn "AWS_SECRET\|PRIVATE_KEY" .
+
 grep -rn "jdbc:.*user.*password" .
 
 # Базы данных
+
 grep -rn "jdbc:mysql\|postgresql://\|mongodb://" .
+
 grep -rn "DB_PASSWORD\|DATABASE_URL" .
 
 # Поиск уязвимых функций:
 
 # Java
+
 grep -rn "Runtime.exec\|ProcessBuilder" .
+
 grep -rn "Statement\|createStatement" .
+
 grep -rn "Class.forName\|newInstance" .
+
 grep -rn "documentBuilder\|SAXParser" .
 
 # Python
+
 grep -rn "eval(\|exec(\|compile(" .
+
 grep -rn "os.system\|subprocess.*shell" .
+
 grep -rn "pickle.loads\|yaml.load" .
+
 grep -rn "cursor.execute.*f\"\|cursor.execute.*%" .
 
