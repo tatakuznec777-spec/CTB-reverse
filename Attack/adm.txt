@@ -1,0 +1,67 @@
+# 1. Клонируем ферму
+git clone https://github.com/DestructiveVoice/DestructiveFarm
+chmod -R 755 DestructiveFarm/  # безопаснее, чем 777
+cd DestructiveFarm/server
+
+# 2. Устанавливаем зависимости
+python3 -m pip install -r requirements.txt
+
+# 3. Чистим старую базу (если есть)
+rm -f flags.sqlite
+
+# 4. Редактируем config.py (ОБЯЗАТЕЛЬНО!)
+sudo nano config.py
+
+меняем конфиг
+
+CONFIG = {
+    # Список соперников (уточните подсеть!)
+    'TEAMS': {
+        f'Team #{i}': f'10.60.{i}.3'  # Пример: 10.60.0.3, 10.60.1.3...
+        for i in range(1, 21)  # 20 команд? Уточните!
+    },
+    
+    # Формат флага (КРИТИЧНО!)
+    'FLAG_FORMAT': r'[A-Z0-9]{31}=',  # или CTF{...}, VolgaCTF{...} — уточните!
+    
+    # Протокол отправки (уточните у оргов!)
+    # Вариант 1: RuCTF HTTP
+    'SYSTEM_PROTOCOL': 'ructf_http',
+    'SYSTEM_URL': 'http://monitor.ructfe.org/flags',
+    'SYSTEM_TOKEN': 'ВАШ_КОМАНДНЫЙ_ТОКЕН',
+    
+    # Вариант 2: VolgaCTF
+    # 'SYSTEM_PROTOCOL': 'volgactf',
+    # 'SYSTEM_HOST': 'final.volgactf.ru',
+    
+    # Вариант 3: ForcAD TCP
+    # 'SYSTEM_PROTOCOL': 'forcad_tcp',
+    # 'SYSTEM_HOST': '10.10.10.10',
+    # 'SYSTEM_PORT': 31337,
+    
+    # Лимиты (обычно дают орги)
+    'SUBMIT_FLAG_LIMIT': 100,  # макс флагов за отправку
+    'SUBMIT_PERIOD': 2,        # интервал отправки (сек)
+    'FLAG_LIFETIME': 300,      # жизнь флага (сек)
+    
+    # ПАРОЛЬ ВЕБ-ИНТЕРФЕЙСА (смените!)
+    'SERVER_PASSWORD': 'СЛОЖНЫЙ_ПАРОЛЬ_123',
+}
+
+
+# 5. Запускаем ферму
+./start_server.sh
+# Если порт 5000 занят: ./start_server.sh -p 5001
+
+Проверка: откройте в браузере http://ВАШ_ВАЙП:5000, введите логин (любой) и пароль из config. Должен открыться дашборд.
+
+Запустить через ферму:
+
+cd ../client
+# Укажите IP фермы и пароль из config
+python3 start_sploit.py --server-url http://127.0.0.1:5000 --server-pass СЛОЖНЫЙ_ПАРОЛЬ_123 test_exploit.py
+
+Проверка в веб-интерфейсе фермы:
+Флаг появился в списке?
+Статус: QUEUED → потом REJECTED (потому что тестовый) — это НОРМАЛЬНО!
+Если статус ERROR — проблема с конфигом или сетью.

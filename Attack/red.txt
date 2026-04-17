@@ -1,0 +1,31 @@
+
+Запускаем сканирование сначала на себя, проверить, потом на противника
+chmod +x quick_scan.sh
+./quick_scan.sh 127.0.0.1  # сначала на себя!
+./quick_scan.sh 10.60.5.3  # потом на соперника
+
+Если нашли уязвимость — сразу пишем минимальный эксплойт
+
+Пишем экплойт по шаблону
+
+запускаем через ферму
+cd DestructiveFarm/client
+python3 start_sploit.py \
+  --server-url http://127.0.0.1:5000 \  # IP вашей фермы
+  --server-pass СЛОЖНЫЙ_ПАРОЛЬ_123 \    # из config.py
+  exploit_template.py                    # ваш скрипт
+
+   Проверка:
+В веб-интерфейсе фермы должны появиться флаги со статусом QUEUED
+Если статус ACCEPTED — вы украли флаг! 🎉
+Если REJECTED — флаг невалидный (возможно, старый или формат не тот)
+
+# Минимальный рабочий эксплойт
+#!/usr/bin/env python3
+import sys, requests
+target = sys.argv[1]
+try:
+    r = requests.get(f"http://{target}/flag", timeout=3)
+    if r.status_code == 200 and "=" in r.text:
+        print(r.text.strip(), flush=True)
+except: pass
